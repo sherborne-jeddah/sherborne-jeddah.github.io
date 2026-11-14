@@ -6,6 +6,10 @@
   "use strict";
   const cfg = window.CCA_CONFIG || {};
   const TABLES = { clubs: "cca_clubs", students: "cca_students", registers: "cca_registers" };
+  // Email links (invitation / password reset) arrive with details in the URL hash; read them before Supabase clears it.
+  const linkHash = new URLSearchParams(location.hash.slice(1));
+  const arrivedVia = linkHash.get("type");                       // "invite" or "recovery"
+  const linkError = linkHash.get("error_description");          // e.g. expired link
   const configured = cfg.SUPABASE_URL && !/YOUR-PROJECT/.test(cfg.SUPABASE_URL) && cfg.SUPABASE_PUBLISHABLE_KEY;
   const sb = configured && window.supabase
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
@@ -128,7 +132,8 @@
       return;
     }
     if (mode === "newpass") {
-      g.innerHTML = `<form id="gform">${head}<p>Choose a new password.</p>
+      const intro = arrivedVia === "invite" ? "Welcome! Choose a password for your account. You'll use it with your email to sign in from now on." : "Choose a new password.";
+      g.innerHTML = `<form id="gform">${head}<p>${intro}</p>
         <div class="field"><label for="g_pw">New password</label><input id="g_pw" type="password" autocomplete="new-password" minlength="8" required></div>
         ${msg ? `<p class="err">${esc(msg)}</p>` : ""}<button class="btn primary" type="submit">Save password</button></form>`;
       g.querySelector("#gform").onsubmit = async (ev) => {
@@ -198,14 +203,15 @@
   };
 
   if (!sb) { document.addEventListener("DOMContentLoaded", () => gate("setup")); return; }
-  sb.auth.onAuthStateChange((event, session) => {
-    if (event === "PASSWORD_RECOVERY") { gate("newpass"); return; }
+  sb.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_OUT") location.reload();
   });
   sb.auth.getSession().then(({ data }) => {
-    if (/type=recovery/.test(location.hash)) return; // handled by PASSWORD_RECOVERY above
-    if (data && data.session) start();
-    else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => gate("login"));
-    else gate("login");
+    const session = data && data.session;
+    const show = (mode, msg) => document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", () => gate(mode, msg)) : gate(mode, msg);
+    if (session && (arrivedVia === "invite" || arrivedVia === "recovery")) show("newpass");
+    else if (session) start();
+    else if (linkError) (history.replaceState(null, "", location.pathname), show("login", /expired|invalid/i.test(linkError) ? "That email link has expired or was already used. Ask the CCA coordinator for a new invitation, or use Forgot password." : linkError));
+    else show("login");
   });
 })();
