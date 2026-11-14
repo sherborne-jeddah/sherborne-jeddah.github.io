@@ -1,0 +1,11 @@
+# Student data exports: never published
+_private/
+# Local secrets
+*.secret
+.env
+.env.*
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
