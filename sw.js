@@ -1,7 +1,7 @@
 // Service worker: makes CCA Planner installable and lets it open without signal.
 // App files: network first (updates arrive at once), cached copy when offline.
 // Supabase data is never cached here.
-const CACHE = 'cca-planner-v1.1.1';
+const CACHE = 'cca-planner-v1.2.0';
 const SHELL = ['./', 'index.html', 'config.js', 'js/ccadb.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

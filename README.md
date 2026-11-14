@@ -3,7 +3,9 @@
 Club (CCA) timetable planner for Sherborne School Jeddah, as an installable app for iPhone, Android and computers.
 It is the "Obsolete" Claude artifact turned into a standalone web app (PWA).
 
-**Live app:** https://ghayathjannoun-code.github.io/cca-planner/ · Supabase project `cca-planner` (org "Sherborne CCA")
+**Live app:** https://sherborne-jeddah.github.io/ (repo sherborne-jeddah/sherborne-jeddah.github.io) · Supabase project `cca-planner` (org "Sherborne CCA")
+
+**Email links are scanner-proof:** school mail scanners open links automatically, so the Supabase *Invite user* and *Reset password* email templates link to `{{ .SiteURL }}?token_hash={{ .TokenHash }}&type=invite` (or `type=recovery`). The one-time code is only used when the person taps **Continue** in the app.
 
 - **Front end:** plain HTML/JS, no build step. Hosted free on GitHub Pages.
 - **Data:** Supabase (Postgres + sign-in + live updates). Everyone sees the same timetable, and changes appear on every open copy at once.
@@ -39,7 +41,7 @@ This repository holds **code only**. The student/club export lives in `_private/
 ### 3. Publish (GitHub Pages)
 1. Create a new GitHub repository, e.g. `cca-planner`, and push this folder to it.
 2. Repository **Settings → Pages →** Source: *Deploy from a branch*, Branch: `main`, folder `/ (root)` → Save.
-3. After a minute the app is live at `https://<your-github-name>.github.io/cca-planner/`.
+3. After a minute the app is live (here: `https://sherborne-jeddah.github.io/`).
 4. In Supabase **Authentication → URL Configuration**, set **Site URL** to that address (needed for "Forgot password" emails).
 
 ## Installing on phones

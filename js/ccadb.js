@@ -8,7 +8,12 @@
   const TABLES = { clubs: "cca_clubs", students: "cca_students", registers: "cca_registers" };
   // Email links (invitation / password reset) arrive with details in the URL hash; read them before Supabase clears it.
   const linkHash = new URLSearchParams(location.hash.slice(1));
-  const arrivedVia = linkHash.get("type");                       // "invite" or "recovery"
+  // Scanner-proof links (?token_hash=…&type=invite|recovery): school mail scanners open every link, so the
+  // one-time code is only used when a person taps "Continue" in the app (see the email templates in README).
+  const linkQuery = new URLSearchParams(location.search);
+  const tokenHash = linkQuery.get("token_hash");
+  const tokenType = /^(invite|recovery)$/.test(linkQuery.get("type") || "") ? linkQuery.get("type") : null;
+  let arrivedVia = tokenType || linkHash.get("type");            // "invite" or "recovery"
   const linkError = linkHash.get("error_description");          // e.g. expired link
   const configured = cfg.SUPABASE_URL && !/YOUR-PROJECT/.test(cfg.SUPABASE_URL) && cfg.SUPABASE_PUBLISHABLE_KEY;
   const sb = configured && window.supabase
@@ -131,6 +136,19 @@
       g.innerHTML = `<form onsubmit="return false">${head}<p class="err">This copy of the app isn't connected to its database yet.</p><p>Fill in <code>config.js</code> with the Supabase project address and publishable key (see README).</p></form>`;
       return;
     }
+    if (mode === "confirm") {
+      const what = tokenType === "invite" ? "You've been invited to CCA Planner. Tap Continue to set up your account." : "Tap Continue to choose a new password.";
+      g.innerHTML = `<form id="gform">${head}<p>${what}</p>${msg ? `<p class="err">${esc(msg)}</p>` : ""}<button class="btn primary" type="submit">Continue</button></form>`;
+      g.querySelector("#gform").onsubmit = async (ev) => {
+        ev.preventDefault();
+        const btn = g.querySelector("[type=submit]"); btn.disabled = true; btn.textContent = "Checking…";
+        const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: tokenType });
+        history.replaceState(null, "", location.pathname);
+        if (error) gate("login", /expired|invalid/i.test(error.message) ? "That email link has expired or was already used. Ask the CCA coordinator for a new invitation, or use Forgot password." : error.message);
+        else gate("newpass");
+      };
+      return;
+    }
     if (mode === "newpass") {
       const intro = arrivedVia === "invite" ? "Welcome! Choose a password for your account. You'll use it with your email to sign in from now on." : "Choose a new password.";
       g.innerHTML = `<form id="gform">${head}<p>${intro}</p>
@@ -209,7 +227,8 @@
   sb.auth.getSession().then(({ data }) => {
     const session = data && data.session;
     const show = (mode, msg) => document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", () => gate(mode, msg)) : gate(mode, msg);
-    if (session && (arrivedVia === "invite" || arrivedVia === "recovery")) show("newpass");
+    if (tokenHash && tokenType) show("confirm");
+    else if (session && (arrivedVia === "invite" || arrivedVia === "recovery")) show("newpass");
     else if (session) start();
     else if (linkError) (history.replaceState(null, "", location.pathname), show("login", /expired|invalid/i.test(linkError) ? "That email link has expired or was already used. Ask the CCA coordinator for a new invitation, or use Forgot password." : linkError));
     else show("login");
