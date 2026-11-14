@@ -149,15 +149,26 @@
       };
       return;
     }
-    if (mode === "newpass") {
-      const intro = arrivedVia === "invite" ? "Welcome! Choose a password for your account. You'll use it with your email to sign in from now on." : "Choose a new password.";
+    if (mode === "newpass" || mode === "changepass") {
+      const change = mode === "changepass";
+      const intro = change ? "Choose a new password for your account (at least 8 characters)."
+        : arrivedVia === "invite" ? "Welcome! Choose a password for your account. You'll use it with your email to sign in from now on." : "Choose a new password.";
       g.innerHTML = `<form id="gform">${head}<p>${intro}</p>
         <div class="field"><label for="g_pw">New password</label><input id="g_pw" type="password" autocomplete="new-password" minlength="8" required></div>
-        ${msg ? `<p class="err">${esc(msg)}</p>` : ""}<button class="btn primary" type="submit">Save password</button></form>`;
+        <div class="field"><label for="g_pw2">Type it again</label><input id="g_pw2" type="password" autocomplete="new-password" minlength="8" required></div>
+        ${msg ? `<p class="err">${esc(msg)}</p>` : ""}<button class="btn primary" type="submit">Save password</button>
+        ${change ? `<button class="btn" type="button" id="g_cancel">Cancel</button>` : ""}</form>`;
+      if (change) g.querySelector("#g_cancel").onclick = () => g.remove();
       g.querySelector("#gform").onsubmit = async (ev) => {
         ev.preventDefault();
-        const { error } = await sb.auth.updateUser({ password: g.querySelector("#g_pw").value });
-        if (error) gate("newpass", error.message); else { g.remove(); start(); }
+        const pw = g.querySelector("#g_pw").value;
+        if (pw !== g.querySelector("#g_pw2").value) { gate(mode, "The two passwords don't match."); return; }
+        const btn = g.querySelector("[type=submit]"); btn.disabled = true; btn.textContent = "Saving…";
+        const { error } = await sb.auth.updateUser({ password: pw });
+        if (error) { gate(mode, /different from the old/i.test(error.message) ? "Choose a password you haven't used before." : error.message); return; }
+        g.remove();
+        if (change) { const t = document.getElementById("toastRoot"); if (t) { t.innerHTML = `<div class="toast" role="status">Password changed</div>`; setTimeout(() => (t.innerHTML = ""), 2400); } }
+        else start();
       };
       return;
     }
@@ -180,7 +191,7 @@
       const email = form.g_em.value.trim();
       if (!email) { gate("login", "Type your email first, then tap Forgot password."); return; }
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-      gate("login", error ? error.message : { ok: true, text: "Check your email for a link to set a new password." });
+      gate("login", error ? error.message : { ok: true, text: "Check your email for a link to set a new password. If the link says it has expired, ask the CCA coordinator to reset your password instead." });
     };
   }
 
@@ -195,8 +206,9 @@
       const top = document.querySelector(".topin");
       if (top && !document.querySelector(".whoami")) {
         const w = document.createElement("div"); w.className = "whoami";
-        w.innerHTML = `<span class="em">${esc(email)}</span><button class="btn small" type="button">Sign out</button>`;
-        w.querySelector("button").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+        w.innerHTML = `<span class="em">${esc(email)}</span><button class="btn small" type="button" data-w="pw">Change password</button><button class="btn small" type="button" data-w="out">Sign out</button>`;
+        w.querySelector('[data-w="pw"]').onclick = () => gate("changepass");
+        w.querySelector('[data-w="out"]').onclick = async () => { await sb.auth.signOut(); location.reload(); };
         top.appendChild(w);
       }
     });

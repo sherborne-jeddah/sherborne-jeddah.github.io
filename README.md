@@ -34,7 +34,7 @@ This repository holds **code only**. The student/club export lives in `_private/
 5. **Project Settings → API keys:** copy the **Project URL** and the **publishable** (anon) key into `config.js`. Never use the secret/service_role key.
 
 ### 2. Accounts
-- **Authentication → Users → Add user → Create new user**, enter the teacher's email + a starter password, tick **Auto Confirm User**.
+- **Authentication → Users → Add user → Create new user**, enter the teacher's email + a starter password, tick **Auto Confirm User**. Send them the link and starter password yourself (Teams, WhatsApp, in person); they change it with **Change password** at the top of the app. Prefer this over "Send invitation": the school mail scanner opens emailed links and uses them up, and the built-in Supabase email only sends a few messages an hour.
 - To let someone edit, add their email in **Table Editor → cca_editors** (or run `insert into cca_editors(email) values ('name@school.com');`).
 - People without a row in `cca_editors` can view, export and take registers, but cannot change the timetable.
 
