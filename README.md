@@ -3,6 +3,8 @@
 Club (CCA) timetable planner for Sherborne School Jeddah, as an installable app for iPhone, Android and computers.
 It is the "Obsolete" Claude artifact turned into a standalone web app (PWA).
 
+**Live app:** https://ghayathjannoun-code.github.io/cca-planner/ · Supabase project `cca-planner` (org "Sherborne CCA")
+
 - **Front end:** plain HTML/JS, no build step. Hosted free on GitHub Pages.
 - **Data:** Supabase (Postgres + sign-in + live updates). Everyone sees the same timetable, and changes appear on every open copy at once.
 - **Who can do what:** anyone with an account can view the timetable and take attendance registers; only emails listed in the `cca_editors` table can change clubs and students.
