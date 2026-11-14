@@ -51,6 +51,10 @@ drop policy if exists cca_registers_write on public.cca_registers;
 create policy cca_registers_read  on public.cca_registers for select to authenticated using (true);
 create policy cca_registers_write on public.cca_registers for all    to authenticated using (true) with check (true);
 -- cca_editors has no policies: it is managed from the Supabase dashboard only.
+-- Table access for signed-in users (the policies above decide which rows). Nothing for anonymous visitors.
+grant select, insert, update, delete on public.cca_clubs, public.cca_students, public.cca_registers to authenticated;
+revoke all on public.cca_clubs, public.cca_students, public.cca_registers, public.cca_editors from anon;
+revoke all on public.cca_editors from authenticated;
 
 -- Merge one JSON object into another, nested objects included (arrays and values are replaced).
 create or replace function public.cca_jsonb_merge(a jsonb, b jsonb) returns jsonb
