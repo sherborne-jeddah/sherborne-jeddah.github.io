@@ -62,3 +62,17 @@ The app gets the school crest as its icon, opens full screen, and updates itself
 
 If the school wants store listings, this same folder can be wrapped with Capacitor (or PWABuilder.com for Android).
 That needs a Google Play developer account ($25 once), an Apple Developer account ($99/year) and a Mac or cloud build service for iOS.
+
+## Staff access code (first sign-in)
+
+Teachers can join on their own: they sign in with their **@sherbornejeddah.sa** email and the staff access code.
+The server (`cca_join` in `supabase/schema.sql`) checks the code, creates a **teacher** account, and the app then
+makes them choose their own password; after that the code no longer works for their email. Editors are still only
+the emails in `cca_editors`. 20 wrong codes in 15 minutes pause joining for everyone.
+
+- The code is stored only as a bcrypt hash in `cca_settings`. Never write it into this repo or the install guide.
+- **Change the code** (SQL Editor, run on its own, don't save the snippet):
+  `insert into public.cca_settings (key, value) values ('join_code_hash', extensions.crypt('NEW-CODE', extensions.gen_salt('bf'))) on conflict (key) do update set value = excluded.value;`
+- **Turn it off:** `delete from public.cca_settings where key = 'join_code_hash';`
+- **See who joined:** Authentication → Users (or `select email, created_at from auth.users order by created_at desc;`). Delete anyone who shouldn't be there.
+- **Forgotten password:** Authentication → Users → the user → "Reset password" won't help (email links get used up by the school mail scanner); instead delete the user so they can join again with the code, or set a temporary password for them.
