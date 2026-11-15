@@ -130,3 +130,55 @@ do $$ begin
   begin alter publication supabase_realtime add table public.cca_students; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.cca_registers; exception when duplicate_object then null; end;
 end $$;
+
+-- ---------------------------------------------------------------------------------------------
+-- First-time access with a shared staff code.
+-- A teacher signs in with their own @sherbornejeddah.sa email and the shared code; cca_join() checks
+-- the code (stored only as a bcrypt hash) and creates a teacher account whose password is that code
+-- and which is flagged needs_password. The app then makes them choose a personal password, after
+-- which the shared code no longer works for that email. Editors are still only the cca_editors list.
+-- Set or change the code (run on its own, never commit it):
+--   insert into public.cca_settings (key, value) values ('join_code_hash', extensions.crypt('NEW-CODE', extensions.gen_salt('bf')))
+--   on conflict (key) do update set value = excluded.value;
+-- Turn the feature off:  delete from public.cca_settings where key = 'join_code_hash';
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.cca_settings (key text primary key, value text not null);
+create table if not exists public.cca_join_attempts (at timestamptz not null default now(), email text, ok boolean not null);
+alter table public.cca_settings enable row level security;
+alter table public.cca_join_attempts enable row level security;
+revoke all on public.cca_settings, public.cca_join_attempts from anon, authenticated;
+
+create or replace function public.cca_join(p_email text, p_code text) returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  e text := lower(trim(coalesce(p_email, '')));
+  h text;
+  uid uuid := gen_random_uuid();
+  fails int;
+begin
+  if e !~ '^[a-z0-9._%+-]+@sherbornejeddah\.sa$' then return 'domain'; end if;
+  -- Slow down guessing: at most 20 wrong codes per 15 minutes in total.
+  select count(*) into fails from public.cca_join_attempts where not ok and at > now() - interval '15 minutes';
+  if fails >= 20 then return 'busy'; end if;
+  select value into h from public.cca_settings where key = 'join_code_hash';
+  if h is null or coalesce(p_code, '') = '' or extensions.crypt(p_code, h) <> h then
+    insert into public.cca_join_attempts (email, ok) values (e, false);
+    return 'code';
+  end if;
+  if exists (select 1 from auth.users where lower(email) = e) then return 'exists'; end if;
+
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token)
+  values ('00000000-0000-0000-0000-000000000000', uid, 'authenticated', 'authenticated', e,
+    extensions.crypt(p_code, extensions.gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb, '{"needs_password":true}'::jsonb, now(), now(),
+    '', '', '', '', '', '', '', '');
+  insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+  values (uid::text, uid, jsonb_build_object('sub', uid::text, 'email', e, 'email_verified', true), 'email', now(), now(), now());
+  insert into public.cca_join_attempts (email, ok) values (e, true);
+  return 'created';
+end $$;
+revoke all on function public.cca_join(text, text) from public;
+grant execute on function public.cca_join(text, text) to anon, authenticated;

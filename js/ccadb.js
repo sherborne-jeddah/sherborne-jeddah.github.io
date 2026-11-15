@@ -149,9 +149,10 @@
       };
       return;
     }
-    if (mode === "newpass" || mode === "changepass") {
-      const change = mode === "changepass";
+    if (mode === "newpass" || mode === "changepass" || mode === "firstpass") {
+      const change = mode === "changepass", first = mode === "firstpass";
       const intro = change ? "Choose a new password for your account (at least 8 characters)."
+        : first ? "Welcome! Before you start, choose your own password (at least 8 characters). From now on you'll sign in with your email and this password; the shared access code won't work for your account any more."
         : arrivedVia === "invite" ? "Welcome! Choose a password for your account. You'll use it with your email to sign in from now on." : "Choose a new password.";
       g.innerHTML = `<form id="gform">${head}<p>${intro}</p>
         <div class="field"><label for="g_pw">New password</label><input id="g_pw" type="password" autocomplete="new-password" minlength="8" required></div>
@@ -163,17 +164,18 @@
         ev.preventDefault();
         const pw = g.querySelector("#g_pw").value;
         if (pw !== g.querySelector("#g_pw2").value) { gate(mode, "The two passwords don't match."); return; }
+        if (lastSignInPassword && pw === lastSignInPassword) { gate(mode, "Choose a password that's different from the one you just signed in with."); return; }
         const btn = g.querySelector("[type=submit]"); btn.disabled = true; btn.textContent = "Saving…";
-        const { error } = await sb.auth.updateUser({ password: pw });
+        const { error } = await sb.auth.updateUser(first ? { password: pw, data: { needs_password: false } } : { password: pw });
         if (error) { gate(mode, /different from the old/i.test(error.message) ? "Choose a password you haven't used before." : error.message); return; }
-        g.remove();
+        g.remove(); lastSignInPassword = "";
         if (change) { const t = document.getElementById("toastRoot"); if (t) { t.innerHTML = `<div class="toast" role="status">Password changed</div>`; setTimeout(() => (t.innerHTML = ""), 2400); } }
         else start();
       };
       return;
     }
     const prev = g.querySelector("#g_em") ? g.querySelector("#g_em").value : "";
-    g.innerHTML = `<form id="gform">${head}<p>Sign in with the email and password the CCA coordinator gave you.</p>
+    g.innerHTML = `<form id="gform">${head}<p>Sign in with your school email and password.<br><span style="font-size:13px">First time? Use your <b>@sherbornejeddah.sa</b> email and the <b>staff access code</b> from the CCA coordinator.</span></p>
       <div class="field"><label for="g_em">Email</label><input id="g_em" type="email" autocomplete="username" inputmode="email" required value="${esc(prev)}"></div>
       <div class="field"><label for="g_pw">Password</label><input id="g_pw" type="password" autocomplete="current-password" required></div>
       ${msg ? `<p class="${msg.ok ? "ok" : "err"}">${esc(msg.text || msg)}</p>` : ""}
@@ -183,9 +185,16 @@
     form.onsubmit = async (ev) => {
       ev.preventDefault();
       const btn = form.querySelector("[type=submit]"); btn.disabled = true; btn.textContent = "Signing in…";
-      const { error } = await sb.auth.signInWithPassword({ email: form.g_em.value.trim(), password: form.g_pw.value });
+      const email = form.g_em.value.trim(), pw = form.g_pw.value;
+      let { error } = await sb.auth.signInWithPassword({ email, password: pw });
+      // Not an account yet? A school email with the staff access code creates one (checked on the server).
+      if (error && /invalid/i.test(error.message) && /@sherbornejeddah\.sa$/i.test(email)) {
+        const { data: r } = await sb.rpc("cca_join", { p_email: email, p_code: pw });
+        if (r === "busy") { gate("login", "Too many attempts. Please wait 15 minutes, then try again."); return; }
+        if (r === "created") ({ error } = await sb.auth.signInWithPassword({ email, password: pw }));
+      }
       if (error) gate("login", /invalid/i.test(error.message) ? "That email and password don't match." : error.message);
-      else { g.remove(); start(); }
+      else { lastSignInPassword = pw; g.remove(); afterSignIn(); }
     };
     g.querySelector("#g_forgot").onclick = async () => {
       const email = form.g_em.value.trim();
@@ -197,7 +206,13 @@
 
   /* ---------- the window.claude stand-in ---------- */
   let signedIn; const ready = new Promise((r) => (signedIn = r));
-  let started = false;
+  let started = false, lastSignInPassword = "";
+  // Accounts made with the shared access code must choose their own password before using the app.
+  async function afterSignIn() {
+    const { data } = await sb.auth.getUser();
+    if (data && data.user && data.user.user_metadata && data.user.user_metadata.needs_password) gate("firstpass");
+    else start();
+  }
   function start() {
     if (started) return; started = true;
     sb.auth.getUser().then(({ data }) => {
@@ -241,7 +256,7 @@
     const show = (mode, msg) => document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", () => gate(mode, msg)) : gate(mode, msg);
     if (tokenHash && tokenType) show("confirm");
     else if (session && (arrivedVia === "invite" || arrivedVia === "recovery")) show("newpass");
-    else if (session) start();
+    else if (session) afterSignIn();
     else if (linkError) (history.replaceState(null, "", location.pathname), show("login", /expired|invalid/i.test(linkError) ? "That email link has expired or was already used. Ask the CCA coordinator for a new invitation, or use Forgot password." : linkError));
     else show("login");
   });

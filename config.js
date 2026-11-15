@@ -4,5 +4,5 @@
 window.CCA_CONFIG = {
   SUPABASE_URL: "https://fccmsbmfduwzrmxbhtvt.supabase.co",
   SUPABASE_PUBLISHABLE_KEY: "sb_publishable_SJW9Ilg-jIXliSkRfUuzBg_ErADvCvo",
-  APP_VERSION: "1.2.1",
+  APP_VERSION: "1.3.0",
 };
